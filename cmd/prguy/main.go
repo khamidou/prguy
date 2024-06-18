@@ -1,14 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-    "os/exec"
-    "time"
-    "errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/getlantern/systray"
 	"github.com/ncruces/zenity"
@@ -32,7 +32,13 @@ func onReady() {
 	systray.SetTemplateIcon([]byte("🕴️"), []byte("🕴️"))
 	systray.SetTitle("PR Guy")
 	//systray.SetTooltip("")
-	mDoSetup := systray.AddMenuItem("GitHub setup", "Authenticate yourself to be able to see your pull requests.")
+	config := Config{}
+	var mDoSetup *systray.MenuItem
+
+	if !config.exists() {
+		mDoSetup = systray.AddMenuItem("GitHub setup", "Authenticate yourself to be able to see your pull requests.")
+	}
+
 	mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
 
 	go func() {
@@ -74,8 +80,8 @@ func startGithubDeviceAuth() {
 
 	if resp.StatusCode != 200 {
 		errorOut("Github API error",
-			fmt.Sprint("Got a '%s'error from the Github API. Please retry in a bit.",
-                       resp.Status)
+			fmt.Sprintf("Got a '%s'error from the Github API. Please retry in a bit.",
+				resp.Status))
 		return
 	}
 	defer resp.Body.Close()
@@ -116,11 +122,11 @@ func startGithubDeviceAuth() {
 		return
 	}
 
-    fmt.Println("user_code", user_code[0])
-    writeToClipboard(user_code[0])
+	fmt.Println("user_code", user_code[0])
+	writeToClipboard(user_code[0])
 	zenity.Error("We just copied an authentication code in your clipboard. You will need to give that code to Github",
 		zenity.Title("Github Setup"),
-		zenity.OKLabel("Log into Github"),)
+		zenity.OKLabel("Log into Github"))
 
 	err = open.Run(verification_uri[0])
 	if err != nil {
@@ -138,13 +144,15 @@ func pollGithubDeviceAuth(deviceCode string) error {
 	duration := 15 * time.Minute
 	startTime := time.Now()
 	for {
+		time.Sleep(20 * time.Second)
+
 		// Check if the time has passed
 		if time.Since(startTime) > duration {
 			errorOut("Timeout", "The device code has expired. Please retry the auth process.")
 			return errors.New("auth_timeout")
 		}
 
-        fmt.Println("Polling Github API...")
+		fmt.Println("Polling Github API...")
 		formData := url.Values{
 			"client_id":   []string{GH_CLIENT_ID},
 			"device_code": []string{deviceCode},
@@ -153,25 +161,25 @@ func pollGithubDeviceAuth(deviceCode string) error {
 
 		encodedForm := formData.Encode()
 		req, err := http.NewRequest("POST",
-			"https://github.com/login/device/code",
+			"https://github.com/login/oauth/access_token",
 			strings.NewReader(encodedForm))
 
 		if err != nil {
 			errorOut("Error building request to the Github API", err.Error())
-			return errors.New("request_error")
+			continue
 		}
 
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
 			errorOut("Github API error", err.Error())
-			return errors.New("api_error")
+			continue
 		}
 
-        if resp.StatusCode == 429 {
-            time.Sleep(15 * time.Second)
-            continue
-        } else if resp.StatusCode != 200 {
+		fmt.Println("resp", resp)
+		if resp.StatusCode == 429 {
+			continue
+		} else if resp.StatusCode != 200 {
 			errorOut("Github API error",
 				"Got a "+string(resp.Status)+
 					"error from the Github API. "+
@@ -181,36 +189,36 @@ func pollGithubDeviceAuth(deviceCode string) error {
 
 		// Read the response body
 		body, err := ioutil.ReadAll(resp.Body)
+		fmt.Println("body", string(body))
 		if err != nil {
 			errorOut("Error reading response body", err.Error())
-			return errors.New("response_error")
+			continue
 		}
 
 		// Parse the form-encoded response
 		parsedResponse, err := url.ParseQuery(string(body))
 		if err != nil {
 			errorOut("Error parsing Github response", err.Error())
-			return errors.New("response_error")
+			continue
 		}
 
+		fmt.Println("parsedResponse", parsedResponse)
 		access_token, ok := parsedResponse["access_token"]
 		if !ok {
-            // sometimes the github API does not error but also does not return the access token.
-            // in this case we just retry.
-            continue
+			// sometimes the github API does not error but also does not return the access token.
+			// in this case we just retry.
+			continue
 		}
 
 		scope, ok := parsedResponse["scope"]
 		if !ok {
 			errorOut("Missing scopes!",
 				"The Github API did not return us the scopes, please retry in a bit.")
-			return errors.New("response_error")
+			continue
 		}
 
 		fmt.Println("access_token", access_token)
 		fmt.Println("scope", scope)
-
-        time.Sleep(5 * time.Second)
 	}
 }
 
