@@ -1,6 +1,7 @@
 package main
 
 import (
+    "context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -10,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getlantern/systray"
+	"fyne.io/systray"
 	"github.com/ncruces/zenity"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -28,10 +29,10 @@ func errorOut(title string, message string) {
 	zenity.Error(message, zenity.Title(title), zenity.ErrorIcon)
 }
 
-func onReady() {
+func setupMenu() {
+    ctx, cancel := context.WithCancel(context.Background())
 	systray.SetTemplateIcon([]byte("🕴️"), []byte("🕴️"))
 	systray.SetTitle("PR Guy")
-	//systray.SetTooltip("")
 	config := Config{}
 	var mDoSetup *systray.MenuItem
 
@@ -42,21 +43,41 @@ func onReady() {
 	mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
 
 	go func() {
-		for {
-			select {
-			case <-mQuitOrig.ClickedCh:
-				fmt.Println("Requesting quit")
-				systray.Quit()
-				fmt.Println("Finished quitting")
-			case <-mDoSetup.ClickedCh:
-				fmt.Println("Performing setup")
-				startGithubDeviceAuth()
+		if !config.exists() {
+			for {
+				select {
+                case <-ctx.Done():
+                    systray.ResetMenu()
+                    return
+
+				case <-mQuitOrig.ClickedCh:
+					fmt.Println("Requesting quit")
+					systray.Quit()
+					fmt.Println("Finished quitting")
+				case <-mDoSetup.ClickedCh:
+					fmt.Println("Performing setup")
+					startGithubDeviceAuth(cancel)
+				}
+			}
+		} else {
+			for {
+				select {
+				case <-mQuitOrig.ClickedCh:
+					fmt.Println("Requesting quit")
+					systray.Quit()
+					fmt.Println("Finished quitting")
+				}
 			}
 		}
 	}()
+
 }
 
-func startGithubDeviceAuth() {
+func onReady() {
+    setupMenu()
+}
+
+func startGithubDeviceAuth(cancel context.CancelFunc) {
 	formData := url.Values{
 		"client_id": []string{GH_CLIENT_ID},
 		"scope":     []string{"notifications"},
@@ -134,17 +155,17 @@ func startGithubDeviceAuth() {
 		return
 	}
 
-	err = pollGithubDeviceAuth(device_code[0])
+	err = pollGithubDeviceAuth(device_code[0], cancel)
 	if err != nil {
 		return
 	}
 }
 
-func pollGithubDeviceAuth(deviceCode string) error {
+func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 	duration := 15 * time.Minute
 	startTime := time.Now()
 	for {
-		time.Sleep(20 * time.Second)
+		time.Sleep(10 * time.Second)
 
 		// Check if the time has passed
 		if time.Since(startTime) > duration {
@@ -217,8 +238,11 @@ func pollGithubDeviceAuth(deviceCode string) error {
 			continue
 		}
 
-		fmt.Println("access_token", access_token)
-		fmt.Println("scope", scope)
+		// Save the access token and scope
+		c := Config{OAuthToken: access_token[0], Scope: scope[0]}
+		c.save()
+        cancel()
+		return nil
 	}
 }
 
