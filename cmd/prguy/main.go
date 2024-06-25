@@ -1,7 +1,8 @@
 package main
 
 import (
-    "context"
+	"context"
+    "reflect"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -30,43 +31,71 @@ func errorOut(title string, message string) {
 }
 
 func setupMenu() {
-    ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	systray.SetTemplateIcon([]byte("🕴️"), []byte("🕴️"))
 	systray.SetTitle("PR Guy")
 	config := Config{}
-	var mDoSetup *systray.MenuItem
-
-	if !config.exists() {
-		mDoSetup = systray.AddMenuItem("GitHub setup", "Authenticate yourself to be able to see your pull requests.")
-	}
-
-	mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
 
 	go func() {
 		if !config.exists() {
+            mDoSetup := systray.AddMenuItem("GitHub setup", "Authenticate yourself to be able to see your pull requests.")
+
+            mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
+
 			for {
 				select {
-                case <-ctx.Done():
-                    systray.ResetMenu()
-                    return
+				case <-ctx.Done():
+					systray.ResetMenu()
+					return
 
 				case <-mQuitOrig.ClickedCh:
 					fmt.Println("Requesting quit")
 					systray.Quit()
-					fmt.Println("Finished quitting")
 				case <-mDoSetup.ClickedCh:
 					fmt.Println("Performing setup")
 					startGithubDeviceAuth(cancel)
 				}
 			}
 		} else {
+			cfg := Config{}
+			cfg.load()
+			prs, err := listUserPRs(cfg.OAuthToken)
+			if err != nil {
+				errorOut("Error fetching PRs", err.Error())
+			}
+
+            var channels []chan struct{}
+			for _, pr := range prs {
+                var pr_status string
+                if pr.mergeable {
+                    pr_status = "✅"
+                } else {
+                    pr_status = "❌"
+                }
+
+                title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
+                channel := systray.AddMenuItem(title, "")
+                channels = append(channels, channel.ClickedCh)
+			}
+
+			mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
+            channels = append(channels, mQuitOrig.ClickedCh)
+
 			for {
-				select {
-				case <-mQuitOrig.ClickedCh:
-					fmt.Println("Requesting quit")
+                i, ok := selectChannels(channels)
+                if !ok {
+                    continue
+                }
+
+                if i == len(channels) - 1 {
+                    // quit
+                    fmt.Println("Requesting quit")
 					systray.Quit()
-					fmt.Println("Finished quitting")
-				}
+                } else {
+                    // open the PR
+                    pr := prs[i]
+                    open.Run(pr.url)
+                }
 			}
 		}
 	}()
@@ -74,13 +103,13 @@ func setupMenu() {
 }
 
 func onReady() {
-    setupMenu()
+	setupMenu()
 }
 
 func startGithubDeviceAuth(cancel context.CancelFunc) {
 	formData := url.Values{
 		"client_id": []string{GH_CLIENT_ID},
-		"scope":     []string{"notifications"},
+        "scope":     []string{"notifications repo"},
 	}
 
 	encodedForm := formData.Encode()
@@ -241,7 +270,7 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 		// Save the access token and scope
 		c := Config{OAuthToken: access_token[0], Scope: scope[0]}
 		c.save()
-        cancel()
+		cancel()
 		return nil
 	}
 }
@@ -263,4 +292,19 @@ func writeToClipboard(text string) error {
 		return err
 	}
 	return copyCmd.Wait()
+}
+
+func selectChannels(chans []chan struct{}) (int, bool) {
+    // straight from https://go.dev/play/p/wCchjGndBC
+	var cases []reflect.SelectCase
+	for _, ch := range chans {
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ch),
+			Send: reflect.Value{},
+		})
+	}
+
+	i, _, ok := reflect.Select(cases)
+    return i, ok
 }
