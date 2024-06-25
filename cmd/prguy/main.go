@@ -30,8 +30,7 @@ func errorOut(title string, message string) {
 	zenity.Error(message, zenity.Title(title), zenity.ErrorIcon)
 }
 
-func setupMenu() {
-	ctx, cancel := context.WithCancel(context.Background())
+func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 	systray.SetTemplateIcon([]byte("🕴️"), []byte("🕴️"))
 	systray.SetTitle("PR Guy")
 	config := Config{}
@@ -59,6 +58,8 @@ func setupMenu() {
 		} else {
 			cfg := Config{}
 			cfg.load()
+            systray.ResetMenu()
+
 			prs, err := listUserPRs(cfg.OAuthToken)
 			if err != nil {
 				errorOut("Error fetching PRs", err.Error())
@@ -103,7 +104,22 @@ func setupMenu() {
 }
 
 func onReady() {
-	setupMenu()
+	go func() {
+        ticker := time.NewTicker(1 * time.Minute)
+        defer ticker.Stop() // Ensure the ticker is stopped when we're done with it
+
+        ctx, cancel := context.WithCancel(context.Background())
+        setupMenu(ctx, cancel)
+        for {
+            select {
+            case <-ticker.C:
+                // refresh the menu every 15 minutes
+                cancel()
+                ctx, cancel = context.WithCancel(context.Background())
+                setupMenu(ctx, cancel)
+            }
+        }
+    }()
 }
 
 func startGithubDeviceAuth(cancel context.CancelFunc) {
