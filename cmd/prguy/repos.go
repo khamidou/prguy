@@ -63,11 +63,9 @@ func listUserPRs(token string) ([]pullRequest, []pullRequest, error) {
 
 	for _, pr := range jsonData {
 		reason := pr["reason"].(string)
-		if reason != "author" || reason != "review_requested" {
+		if reason != "author" && reason != "review_requested" {
 			continue
 		}
-
-        fmt.Println(pr)
 
 		subject := pr["subject"].(map[string]interface{})
         prAPIUrl := subject["url"].(string)
