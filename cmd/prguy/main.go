@@ -32,7 +32,7 @@ func errorOut(title string, message string) {
 
 func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 	systray.SetTemplateIcon([]byte("🕴️"), []byte("🕴️"))
-	systray.SetTitle("PR Guy")
+	systray.SetTitle("🕴️")
 	config := Config{}
 
 	go func() {
@@ -57,27 +57,56 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 			}
 		} else {
 			cfg := Config{}
+            var channels []chan struct{}
+            var channelsMap = make(map[chan struct{}]pullRequest)
+
 			cfg.load()
             systray.ResetMenu()
 
-			prs, err := listUserPRs(cfg.OAuthToken)
+			myPRs, otherPRs, err := listUserPRs(cfg.OAuthToken)
 			if err != nil {
 				errorOut("Error fetching PRs", err.Error())
 			}
 
-            var channels []chan struct{}
-			for _, pr := range prs {
-                var pr_status string
-                if pr.mergeable {
-                    pr_status = "✅"
-                } else {
-                    pr_status = "❌"
-                }
+            if len(myPRs) == 0 {
+                systray.AddMenuItem("No PRs out from you, let's get after it!", "")
+            } else {
+                for _, pr := range myPRs {
+                    var pr_status string
+                    if pr.mergeable {
+                        pr_status = "✅"
+                    } else {
+                        pr_status = "❌"
+                    }
 
-                title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
-                channel := systray.AddMenuItem(title, "")
-                channels = append(channels, channel.ClickedCh)
-			}
+                    title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
+                    channel := systray.AddMenuItem(title, "")
+                    channels = append(channels, channel.ClickedCh)
+                    channelsMap[channel.ClickedCh] = pr
+                }
+            }
+
+            systray.AddSeparator()
+
+            if len(myPRs) != 0 && len(otherPRs) == 0 {
+                systray.AddMenuItem("No PRs from others, no news is good news.", "")
+            } else if len(otherPRs) != 0 {
+                for _, pr := range myPRs {
+                    var pr_status string
+                    if pr.mergeable {
+                        pr_status = "✅"
+                    } else {
+                        pr_status = "❌"
+                    }
+
+                    title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
+                    channel := systray.AddMenuItem(title, "")
+                    channels = append(channels, channel.ClickedCh)
+                    channelsMap[channel.ClickedCh] = pr
+                }
+            }
+
+            systray.AddSeparator()
 
 			mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
             channels = append(channels, mQuitOrig.ClickedCh)
@@ -94,7 +123,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 					systray.Quit()
                 } else {
                     // open the PR
-                    pr := prs[i]
+                    pr := channelsMap[channels[i]]
                     open.Run(pr.url)
                 }
 			}
