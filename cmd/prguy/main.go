@@ -91,7 +91,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
             if len(myPRs) != 0 && len(otherPRs) == 0 {
                 systray.AddMenuItem("No PRs from others, no news is good news.", "")
             } else if len(otherPRs) != 0 {
-                for _, pr := range myPRs {
+                for _, pr := range otherPRs {
                     var pr_status string
                     if pr.mergeable {
                         pr_status = "✅"
@@ -189,7 +189,6 @@ func startGithubDeviceAuth(cancel context.CancelFunc) {
 	}
 
 	// Parse the form-encoded response
-	fmt.Println("body", string(body))
 	parsedResponse, err := url.ParseQuery(string(body))
 	if err != nil {
 		errorOut("Github API error", err.Error())
@@ -217,7 +216,6 @@ func startGithubDeviceAuth(cancel context.CancelFunc) {
 		return
 	}
 
-	fmt.Println("user_code", user_code[0])
 	writeToClipboard(user_code[0])
 	zenity.Error("We just copied an authentication code in your clipboard. You will need to give that code to Github",
 		zenity.Title("Github Setup"),
@@ -271,7 +269,6 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 			continue
 		}
 
-		fmt.Println("resp", resp)
 		if resp.StatusCode == 429 {
 			continue
 		} else if resp.StatusCode != 200 {
@@ -284,7 +281,6 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 
 		// Read the response body
 		body, err := ioutil.ReadAll(resp.Body)
-		fmt.Println("body", string(body))
 		if err != nil {
 			errorOut("Error reading response body", err.Error())
 			continue
@@ -297,7 +293,6 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 			continue
 		}
 
-		fmt.Println("parsedResponse", parsedResponse)
 		access_token, ok := parsedResponse["access_token"]
 		if !ok {
 			// sometimes the github API does not error but also does not return the access token.
