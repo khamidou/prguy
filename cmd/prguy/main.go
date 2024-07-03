@@ -137,7 +137,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 
 func onReady() {
 	go func() {
-		ticker := time.NewTicker(1 * time.Minute)
+		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop() // Ensure the ticker is stopped when we're done with it
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -148,6 +148,7 @@ func onReady() {
 				// refresh the menu every 15 minutes
 				cancel()
 				ctx, cancel = context.WithCancel(context.Background())
+				fmt.Println("Refreshing menu")
 				setupMenu(ctx, cancel)
 			}
 		}
