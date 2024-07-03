@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-    "reflect"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os/exec"
+	"reflect"
 	"strings"
 	"time"
 
@@ -37,9 +37,9 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 
 	go func() {
 		if !config.exists() {
-            mDoSetup := systray.AddMenuItem("GitHub setup", "Authenticate yourself to be able to see your pull requests.")
+			mDoSetup := systray.AddMenuItem("GitHub setup", "Authenticate yourself to be able to see your pull requests.")
 
-            mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
+			mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
 
 			for {
 				select {
@@ -57,75 +57,78 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 			}
 		} else {
 			cfg := Config{}
-            var channels []chan struct{}
-            var channelsMap = make(map[chan struct{}]pullRequest)
+			var channels []chan struct{}
+			var channelsMap = make(map[chan struct{}]pullRequest)
 
 			cfg.load()
-            systray.ResetMenu()
+			systray.ResetMenu()
 
+			fmt.Println("Fetching PRs...")
 			myPRs, otherPRs, err := listUserPRs(cfg.OAuthToken)
 			if err != nil {
-				errorOut("Error fetching PRs", err.Error())
+				fmt.Println("Error fetching PRs:", err)
+				time.Sleep(35 * time.Second)
+				return
 			}
 
-            if len(myPRs) == 0 {
-                systray.AddMenuItem("No PRs out from you, let's get after it!", "")
-            } else {
-                for _, pr := range myPRs {
-                    var pr_status string
-                    if pr.mergeable {
-                        pr_status = "✅"
-                    } else {
-                        pr_status = "❌"
-                    }
+			if len(myPRs) == 0 {
+				systray.AddMenuItem("No PRs out from you, let's get after it!", "")
+			} else {
+				for _, pr := range myPRs {
+					var pr_status string
+					if pr.mergeable {
+						pr_status = "✅"
+					} else {
+						pr_status = "❌"
+					}
 
-                    title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
-                    channel := systray.AddMenuItem(title, "")
-                    channels = append(channels, channel.ClickedCh)
-                    channelsMap[channel.ClickedCh] = pr
-                }
-            }
+					title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
+					channel := systray.AddMenuItem(title, "")
+					channels = append(channels, channel.ClickedCh)
+					channelsMap[channel.ClickedCh] = pr
+				}
+			}
 
-            systray.AddSeparator()
+			systray.AddSeparator()
 
-            if len(myPRs) != 0 && len(otherPRs) == 0 {
-                systray.AddMenuItem("No PRs from others, no news is good news.", "")
-            } else if len(otherPRs) != 0 {
-                for _, pr := range otherPRs {
-                    var pr_status string
-                    if pr.mergeable {
-                        pr_status = "✅"
-                    } else {
-                        pr_status = "❌"
-                    }
+			if len(myPRs) != 0 && len(otherPRs) == 0 {
+				systray.AddMenuItem("No PRs to review, no news is good news.", "")
+			} else if len(otherPRs) != 0 {
+				for _, pr := range otherPRs {
+					var pr_status string
+					if pr.mergeable {
+						pr_status = "✅"
+					} else {
+						pr_status = "❌"
+					}
 
-                    title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
-                    channel := systray.AddMenuItem(title, "")
-                    channels = append(channels, channel.ClickedCh)
-                    channelsMap[channel.ClickedCh] = pr
-                }
-            }
+					title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
+					channel := systray.AddMenuItem(title, "")
+					channels = append(channels, channel.ClickedCh)
+					channelsMap[channel.ClickedCh] = pr
+				}
+			}
 
-            systray.AddSeparator()
+			systray.AddSeparator()
 
 			mQuitOrig := systray.AddMenuItem("Quit", "Quit the app")
-            channels = append(channels, mQuitOrig.ClickedCh)
+			channels = append(channels, mQuitOrig.ClickedCh)
 
 			for {
-                i, ok := selectChannels(channels)
-                if !ok {
-                    continue
-                }
+				i, ok := selectChannels(channels)
+				if !ok {
+					continue
+				}
 
-                if i == len(channels) - 1 {
-                    // quit
-                    fmt.Println("Requesting quit")
+				if i == len(channels)-1 {
+					// quit
+					fmt.Println("Requesting quit")
 					systray.Quit()
-                } else {
-                    // open the PR
-                    pr := channelsMap[channels[i]]
-                    open.Run(pr.url)
-                }
+				} else {
+					// open the PR
+					pr := channelsMap[channels[i]]
+					open.Run(pr.url)
+				}
 			}
 		}
 	}()
@@ -134,27 +137,27 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 
 func onReady() {
 	go func() {
-        ticker := time.NewTicker(1 * time.Minute)
-        defer ticker.Stop() // Ensure the ticker is stopped when we're done with it
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop() // Ensure the ticker is stopped when we're done with it
 
-        ctx, cancel := context.WithCancel(context.Background())
-        setupMenu(ctx, cancel)
-        for {
-            select {
-            case <-ticker.C:
-                // refresh the menu every 15 minutes
-                cancel()
-                ctx, cancel = context.WithCancel(context.Background())
-                setupMenu(ctx, cancel)
-            }
-        }
-    }()
+		ctx, cancel := context.WithCancel(context.Background())
+		setupMenu(ctx, cancel)
+		for {
+			select {
+			case <-ticker.C:
+				// refresh the menu every 15 minutes
+				cancel()
+				ctx, cancel = context.WithCancel(context.Background())
+				setupMenu(ctx, cancel)
+			}
+		}
+	}()
 }
 
 func startGithubDeviceAuth(cancel context.CancelFunc) {
 	formData := url.Values{
 		"client_id": []string{GH_CLIENT_ID},
-        "scope":     []string{"notifications repo"},
+		"scope":     []string{"notifications repo"},
 	}
 
 	encodedForm := formData.Encode()
@@ -174,9 +177,6 @@ func startGithubDeviceAuth(cancel context.CancelFunc) {
 	}
 
 	if resp.StatusCode != 200 {
-		errorOut("Github API error",
-			fmt.Sprintf("Got a '%s'error from the Github API. Please retry in a bit.",
-				resp.Status))
 		return
 	}
 	defer resp.Body.Close()
@@ -272,10 +272,6 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 		if resp.StatusCode == 429 {
 			continue
 		} else if resp.StatusCode != 200 {
-			errorOut("Github API error",
-				"Got a "+string(resp.Status)+
-					"error from the Github API. "+
-					"Please retry in a bit.")
 			return errors.New("api_error")
 		}
 
@@ -335,7 +331,7 @@ func writeToClipboard(text string) error {
 }
 
 func selectChannels(chans []chan struct{}) (int, bool) {
-    // straight from https://go.dev/play/p/wCchjGndBC
+	// straight from https://go.dev/play/p/wCchjGndBC
 	var cases []reflect.SelectCase
 	for _, ch := range chans {
 		cases = append(cases, reflect.SelectCase{
@@ -346,5 +342,5 @@ func selectChannels(chans []chan struct{}) (int, bool) {
 	}
 
 	i, _, ok := reflect.Select(cases)
-    return i, ok
+	return i, ok
 }
