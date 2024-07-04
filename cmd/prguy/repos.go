@@ -13,16 +13,17 @@ type buildStatus int
 var errNoAccessToPR = errors.New("No access to PR")
 
 const (
-	buildPending = iota
+	buildPending buildStatus = iota
 	buildSuccess
 	buildFailure
 	buildCanceled
 )
 
 type pullRequest struct {
-	url       string
-	title     string
-	mergeable bool
+	url         string
+	title       string
+	mergeable   bool
+	buildStatus buildStatus
 }
 
 func listUserPRs(token string) ([]pullRequest, []pullRequest, error) {
@@ -71,7 +72,6 @@ func listUserPRs(token string) ([]pullRequest, []pullRequest, error) {
 
 		subject := pr["subject"].(map[string]interface{})
 		prAPIUrl := subject["url"].(string)
-		fmt.Println("fetching one PR", subject["title"].(string))
 
 		prData, err := fetchOneRESTObject(prAPIUrl, token)
 		if err == errNoAccessToPR {
@@ -81,28 +81,102 @@ func listUserPRs(token string) ([]pullRequest, []pullRequest, error) {
 			return nil, nil, err
 		}
 
+		var prSHA string
+		var repoFullName string
+		prStatus := buildPending
+		if _, ok := prData["head"]; ok {
+			headInfo := prData["head"].(map[string]interface{})
+			if _, ok := headInfo["sha"]; ok {
+				prSHA = headInfo["sha"].(string)
+			}
+
+			if _, ok := headInfo["repo"]; ok {
+				repoInfo := headInfo["repo"].(map[string]interface{})
+				repoFullName = repoInfo["full_name"].(string)
+			}
+		}
+
+		if prSHA != "" && repoFullName != "" {
+			prStatus, err = getBuildStatus(repoFullName, prSHA, token)
+			if err != nil {
+				prStatus = buildPending
+			}
+		}
+
 		prUrl := prData["_links"].(map[string]interface{})["html"].(map[string]interface{})["href"].(string)
 		if _, ok := PRsSeen[prUrl]; ok {
 			continue
 		}
 
 		PRsSeen[prUrl] = true
+		mergeableState := prData["mergeable_state"].(string)
+		mergeable := mergeableState == "clean" || mergeableState == "has_hooks"
 		if reason == "author" {
 			myPRs = append(myPRs, pullRequest{
-				url:       prUrl,
-				title:     subject["title"].(string),
-				mergeable: prData["mergeable"].(bool),
+				url:         prUrl,
+				title:       subject["title"].(string),
+				mergeable:   mergeable,
+				buildStatus: prStatus,
 			})
 		} else {
 			otherPRs = append(otherPRs, pullRequest{
-				url:       prUrl,
-				title:     subject["title"].(string),
-				mergeable: prData["mergeable"].(bool),
+				url:         prUrl,
+				title:       subject["title"].(string),
+				mergeable:   mergeable,
+				buildStatus: prStatus,
 			})
 		}
 	}
 
 	return myPRs, otherPRs, nil
+}
+
+func getApprovalStatus(prUrl string, token string) (bool, error) {
+	return false, nil
+}
+
+func getBuildStatus(repoFullName string, sha string, token string) (buildStatus, error) {
+	possibleUrls := []string{
+		fmt.Sprintf("https://api.github.com/repos/%s/commits/%s/check-runs",
+			repoFullName, sha),
+		fmt.Sprintf("https://api.github.com/repos/%s/commits/%s/status",
+			repoFullName, sha),
+	}
+
+	// There's two different APIs for statuses, so we try both
+	for _, url := range possibleUrls {
+		resp, err := fetchOneRESTObject(url, token)
+		if err != nil {
+			continue
+		}
+
+		if _, ok := resp["check_runs"]; ok {
+			for _, checkRun := range resp["check_runs"].([]interface{}) {
+				checkRunMap := checkRun.(map[string]interface{})
+				if checkRunMap["status"].(string) == "completed" {
+					if checkRunMap["conclusion"].(string) == "success" {
+						return buildSuccess, nil
+					} else {
+						return buildFailure, nil
+					}
+				}
+			}
+		} else if _, ok := resp["state"]; ok {
+			state := resp["state"].(string)
+			switch state {
+			case "success":
+				return buildSuccess, nil
+			case "failure":
+				return buildFailure, nil
+			case "pending":
+				continue
+			case "error":
+				return buildFailure, nil
+			}
+		}
+	}
+
+	return buildPending, errors.New("Unknown build status")
 }
 
 func fetchOneRESTObject(url string, token string) (map[string]interface{}, error) {

@@ -62,6 +62,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 
 			cfg.load()
 			systray.ResetMenu()
+			systray.AddMenuItem("Fetching PRs from Github...", "")
 
 			fmt.Println("Fetching PRs...")
 			myPRs, otherPRs, err := listUserPRs(cfg.OAuthToken)
@@ -71,18 +72,29 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 				return
 			}
 
+			systray.ResetMenu()
+
 			if len(myPRs) == 0 {
 				systray.AddMenuItem("No PRs out from you, let's get after it!", "")
 			} else {
 				for _, pr := range myPRs {
 					var pr_status string
+					var build_status string
 					if pr.mergeable {
 						pr_status = "✅"
 					} else {
 						pr_status = "❌"
 					}
 
-					title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
+					if pr.buildStatus == buildSuccess {
+						build_status = "🟢"
+					} else if pr.buildStatus == buildFailure {
+						build_status = "🔴"
+					} else {
+						build_status = "🔵"
+					}
+
+					title := fmt.Sprintf("%-*s %s%s", 50, pr.title, build_status, pr_status)
 					channel := systray.AddMenuItem(title, "")
 					channels = append(channels, channel.ClickedCh)
 					channelsMap[channel.ClickedCh] = pr
