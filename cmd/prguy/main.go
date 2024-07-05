@@ -62,7 +62,8 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 
 			cfg.load()
 			systray.ResetMenu()
-			systray.AddMenuItem("Fetching PRs from Github...", "")
+			statusItem := systray.AddMenuItem("Fetching PRs from Github...", "")
+			statusItem.Disable()
 
 			fmt.Println("Fetching PRs...")
 			myPRs, otherPRs, err := listUserPRs(cfg.OAuthToken)
