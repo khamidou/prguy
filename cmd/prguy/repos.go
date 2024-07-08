@@ -26,7 +26,16 @@ type pullRequest struct {
 	buildStatus buildStatus
 }
 
-func listUserPRs(token string) ([]pullRequest, []pullRequest, error) {
+func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error) {
+	if isDemo {
+		return []pullRequest{
+				{url: "blah", title: "Unbreak prod", mergeable: true, buildStatus: buildFailure},
+				{url: "blah", title: "Fix the tests michael broke", mergeable: true, buildStatus: buildPending},
+			}, []pullRequest{
+				{url: "blah", title: "Revert michael's 'fix'", mergeable: true, buildStatus: buildFailure},
+			}, nil
+	}
+
 	githubUrl := "https://api.github.com/notifications?participating=true&all=true"
 	req, err := http.NewRequest("GET", githubUrl, nil)
 	if err != nil {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -19,7 +20,11 @@ import (
 
 const GH_CLIENT_ID = "Ov23liJtErJem2rhR36t"
 
+var demoFlag = flag.Bool("demo", false, "Run the app in demo mode")
+
 func main() {
+	flag.Parse()
+	fmt.Println("Demo mode:", *demoFlag)
 	onExit := func() {
 	}
 
@@ -66,7 +71,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 			statusItem.Disable()
 
 			fmt.Println("Fetching PRs...")
-			myPRs, otherPRs, err := listUserPRs(cfg.OAuthToken)
+			myPRs, otherPRs, err := listUserPRs(cfg.OAuthToken, *demoFlag)
 			if err != nil {
 				fmt.Println("Error fetching PRs:", err)
 				time.Sleep(35 * time.Second)
@@ -79,26 +84,9 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 				systray.AddMenuItem("No PRs out from you, let's get after it!", "")
 			} else {
 				for _, pr := range myPRs {
-					var pr_status string
-					var build_status string
-					if pr.mergeable {
-						pr_status = "✅"
-					} else {
-						pr_status = "❌"
-					}
-
-					if pr.buildStatus == buildSuccess {
-						build_status = "🟢"
-					} else if pr.buildStatus == buildFailure {
-						build_status = "🔴"
-					} else {
-						build_status = "🔵"
-					}
-
-					title := fmt.Sprintf("%-*s %s%s", 50, pr.title, build_status, pr_status)
-					channel := systray.AddMenuItem(title, "")
-					channels = append(channels, channel.ClickedCh)
-					channelsMap[channel.ClickedCh] = pr
+					systrayItem := renderPR(pr)
+					channels = append(channels, systrayItem.ClickedCh)
+					channelsMap[systrayItem.ClickedCh] = pr
 				}
 			}
 
@@ -108,17 +96,9 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 				systray.AddMenuItem("No PRs to review, no news is good news.", "")
 			} else if len(otherPRs) != 0 {
 				for _, pr := range otherPRs {
-					var pr_status string
-					if pr.mergeable {
-						pr_status = "✅"
-					} else {
-						pr_status = "❌"
-					}
-
-					title := fmt.Sprintf("%-*s %s", 50, pr.title, pr_status)
-					channel := systray.AddMenuItem(title, "")
-					channels = append(channels, channel.ClickedCh)
-					channelsMap[channel.ClickedCh] = pr
+					systrayItem := renderPR(pr)
+					channels = append(channels, systrayItem.ClickedCh)
+					channelsMap[systrayItem.ClickedCh] = pr
 				}
 			}
 
@@ -357,4 +337,26 @@ func selectChannels(chans []chan struct{}) (int, bool) {
 
 	i, _, ok := reflect.Select(cases)
 	return i, ok
+}
+
+func renderPR(pr pullRequest) *systray.MenuItem {
+	var pr_status string
+	var build_status string
+
+	if pr.mergeable {
+		pr_status = "✅"
+	} else {
+		pr_status = "❌"
+	}
+
+	if pr.buildStatus == buildSuccess {
+		build_status = "🟢"
+	} else if pr.buildStatus == buildFailure {
+		build_status = "🔴"
+	} else {
+		build_status = "🔵"
+	}
+
+	title := fmt.Sprintf("%s%s %s", pr_status, build_status, pr.title)
+	return systray.AddMenuItem(title, "")
 }
