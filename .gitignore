@@ -23,3 +23,6 @@ go.work.sum
 
 *.swp
 *.swo
+
+PRGuy.app/Contents/MacOS/prguy
+PRGuy.app/Contents/_CodeSignature/CodeResources
