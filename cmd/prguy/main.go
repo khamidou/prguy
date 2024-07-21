@@ -81,7 +81,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 			systray.ResetMenu()
 
 			if len(myPRs) == 0 {
-				systray.AddMenuItem("No PRs out from you, let's get after it!", "")
+				systray.AddMenuItem("No PRs out from you – yet", "")
 			} else {
 				for _, pr := range myPRs {
 					systrayItem := renderPR(pr)

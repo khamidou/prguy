@@ -105,6 +105,11 @@ func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error
 			}
 		}
 
+		merged := prData["merged"].(bool)
+		if merged {
+			continue
+		}
+
 		if prSHA != "" && repoFullName != "" {
 			prStatus, err = getBuildStatus(repoFullName, prSHA, token)
 			if err != nil {
