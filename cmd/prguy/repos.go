@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 type buildStatus int
@@ -82,6 +83,7 @@ func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error
 		subject := pr["subject"].(map[string]interface{})
 		prAPIUrl := subject["url"].(string)
 
+		fmt.Println("Fetching PR data", prAPIUrl)
 		prData, err := fetchOneRESTObject(prAPIUrl, token)
 		if err == errNoAccessToPR {
 			// Skip PRs we don't have access to
@@ -111,6 +113,7 @@ func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error
 		}
 
 		if prSHA != "" && repoFullName != "" {
+			fmt.Println("Fetching build status", repoFullName, prSHA)
 			prStatus, err = getBuildStatus(repoFullName, prSHA, token)
 			if err != nil {
 				prStatus = buildPending
@@ -140,6 +143,8 @@ func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error
 				buildStatus: prStatus,
 			})
 		}
+
+		time.Sleep(1 * time.Second)
 	}
 
 	return myPRs, otherPRs, nil

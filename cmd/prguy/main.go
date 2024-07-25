@@ -57,7 +57,12 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 					systray.Quit()
 				case <-mDoSetup.ClickedCh:
 					fmt.Println("Performing setup")
-					startGithubDeviceAuth(cancel)
+					err := startGithubDeviceAuth(cancel)
+					if err == nil {
+						fmt.Println("Setup complete")
+						cancel()
+						return
+					}
 				}
 			}
 		} else {
@@ -125,7 +130,6 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 			}
 		}
 	}()
-
 }
 
 func onReady() {
@@ -137,8 +141,11 @@ func onReady() {
 		setupMenu(ctx, cancel)
 		for {
 			select {
+			case <-ctx.Done():
+				ctx, cancel = context.WithCancel(context.Background())
+				fmt.Println("Refreshing menu after auth")
+				setupMenu(ctx, cancel)
 			case <-ticker.C:
-				// refresh the menu every 15 minutes
 				cancel()
 				ctx, cancel = context.WithCancel(context.Background())
 				fmt.Println("Refreshing menu")
@@ -148,7 +155,7 @@ func onReady() {
 	}()
 }
 
-func startGithubDeviceAuth(cancel context.CancelFunc) {
+func startGithubDeviceAuth(cancel context.CancelFunc) error {
 	formData := url.Values{
 		"client_id": []string{GH_CLIENT_ID},
 		"scope":     []string{"notifications repo"},
@@ -160,18 +167,18 @@ func startGithubDeviceAuth(cancel context.CancelFunc) {
 		strings.NewReader(encodedForm))
 	if err != nil {
 		errorOut("Error building request to the Github API", err.Error())
-		return
+		return err
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		errorOut("Github API error", err.Error())
-		return
+		return err
 	}
 
 	if resp.StatusCode != 200 {
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
@@ -179,35 +186,35 @@ func startGithubDeviceAuth(cancel context.CancelFunc) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		errorOut("Error reading response body", err.Error())
-		return
+		return err
 	}
 
 	// Parse the form-encoded response
 	parsedResponse, err := url.ParseQuery(string(body))
 	if err != nil {
 		errorOut("Github API error", err.Error())
-		return
+		return err
 	}
 
 	device_code, ok := parsedResponse["device_code"]
 	if !ok {
 		errorOut("Missing device code!",
 			"The Github API did not return us a device code, please retry in a bit.")
-		return
+		return err
 	}
 
 	user_code, ok := parsedResponse["user_code"]
 	if !ok {
 		errorOut("Missing user code!",
 			"The Github API did not return us a user code, please retry in a bit.")
-		return
+		return err
 	}
 
 	verification_uri, ok := parsedResponse["verification_uri"]
 	if !ok {
 		errorOut("Missing verification uri!",
 			"The Github API did not return us a verification uri, please retry in a bit.")
-		return
+		return err
 	}
 
 	writeToClipboard(user_code[0])
@@ -218,13 +225,15 @@ func startGithubDeviceAuth(cancel context.CancelFunc) {
 	err = open.Run(verification_uri[0])
 	if err != nil {
 		errorOut("Error opening the browser", err.Error())
-		return
+		return err
 	}
 
 	err = pollGithubDeviceAuth(device_code[0], cancel)
 	if err != nil {
-		return
+		return err
 	}
+
+	return nil
 }
 
 func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
@@ -298,6 +307,7 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 		}
 
 		// Save the access token and scope
+		fmt.Println("Saving access token and scope")
 		c := Config{OAuthToken: access_token[0], Scope: scope[0]}
 		c.save()
 		cancel()
