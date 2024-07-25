@@ -218,7 +218,8 @@ func startGithubDeviceAuth(cancel context.CancelFunc) error {
 	}
 
 	writeToClipboard(user_code[0])
-	zenity.Error("We just copied an authentication code in your clipboard. You will need to give that code to Github",
+	zenity.Info("We just copied an authentication code in your clipboard. You will need to give that code to Github",
+		zenity.NoIcon,
 		zenity.Title("Github Setup"),
 		zenity.OKLabel("Log into Github"))
 
