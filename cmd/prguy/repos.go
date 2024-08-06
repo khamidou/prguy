@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/iancoleman/orderedmap"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -27,14 +28,20 @@ type pullRequest struct {
 	buildStatus buildStatus
 }
 
-func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error) {
+func listUserPRs(token string, isDemo bool) (*orderedmap.OrderedMap, *orderedmap.OrderedMap, error) {
+	myPRs := orderedmap.New()
+	otherPRs := orderedmap.New()
+
 	if isDemo {
-		return []pullRequest{
-				{url: "blah", title: "Unbreak prod", mergeable: true, buildStatus: buildFailure},
-				{url: "blah", title: "Fix the tests michael broke", mergeable: true, buildStatus: buildPending},
-			}, []pullRequest{
-				{url: "blah", title: "Revert michael's 'fix'", mergeable: true, buildStatus: buildFailure},
-			}, nil
+		myPRs.Set("michael/repo", []pullRequest{
+			{url: "blah", title: "Unbreak prod", mergeable: true, buildStatus: buildFailure},
+			{url: "blah", title: "Fix the tests michael broke", mergeable: true, buildStatus: buildPending}})
+
+		otherPRs.Set("michael/repo", []pullRequest{
+			{url: "blah", title: "Revert michael's 'fix'", mergeable: true, buildStatus: buildFailure},
+		})
+
+		return myPRs, otherPRs, nil
 	}
 
 	githubUrl := "https://api.github.com/notifications?participating=true&all=true"
@@ -62,9 +69,6 @@ func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error
 	if err != nil {
 		return nil, nil, err
 	}
-
-	var myPRs []pullRequest
-	var otherPRs []pullRequest
 
 	var jsonData []map[string]interface{}
 	var PRsSeen = make(map[string]bool)
@@ -129,19 +133,34 @@ func listUserPRs(token string, isDemo bool) ([]pullRequest, []pullRequest, error
 		mergeableState := prData["mergeable_state"].(string)
 		mergeable := mergeableState == "clean" || mergeableState == "has_hooks"
 		if reason == "author" {
-			myPRs = append(myPRs, pullRequest{
+			if _, ok := myPRs.Get(repoFullName); !ok {
+				myPRs.Set(repoFullName, []pullRequest{})
+			}
+
+			prContents := pullRequest{
 				url:         prUrl,
 				title:       subject["title"].(string),
 				mergeable:   mergeable,
 				buildStatus: prStatus,
-			})
+			}
+			contents, _ := myPRs.Get(repoFullName)
+			var PRsList = contents.([]pullRequest)
+			PRsList = append(PRsList, prContents)
+			myPRs.Set(repoFullName, PRsList)
 		} else {
-			otherPRs = append(otherPRs, pullRequest{
-				url:         prUrl,
+			if _, ok := otherPRs.Get(repoFullName); !ok {
+				otherPRs.Set(repoFullName, []pullRequest{})
+			}
+
+			prContents := pullRequest{url: prUrl,
 				title:       subject["title"].(string),
 				mergeable:   mergeable,
 				buildStatus: prStatus,
-			})
+			}
+			contents, _ := otherPRs.Get(repoFullName)
+			var PRsList = contents.([]pullRequest)
+			PRsList = append(PRsList, prContents)
+			otherPRs.Set(repoFullName, PRsList)
 		}
 
 		time.Sleep(1 * time.Second)

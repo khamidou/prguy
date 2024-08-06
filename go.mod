@@ -4,6 +4,7 @@ go 1.22.3
 
 require (
 	fyne.io/systray v1.10.0
+	github.com/iancoleman/orderedmap v0.3.0
 	github.com/ncruces/zenity v0.10.12
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 )

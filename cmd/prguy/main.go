@@ -85,25 +85,41 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 
 			systray.ResetMenu()
 
-			if len(myPRs) == 0 {
+			if len(myPRs.Keys()) == 0 {
 				systray.AddMenuItem("No PRs out from you – yet", "")
 			} else {
-				for _, pr := range myPRs {
-					systrayItem := renderPR(pr)
-					channels = append(channels, systrayItem.ClickedCh)
-					channelsMap[systrayItem.ClickedCh] = pr
+				for _, repo := range myPRs.Keys() {
+					prs, _ := myPRs.Get(repo)
+					prList := prs.([]pullRequest)
+					if len(prList) == 0 {
+						continue
+					}
+
+					for _, pr := range prList {
+						systrayItem := renderPR(pr)
+						channels = append(channels, systrayItem.ClickedCh)
+						channelsMap[systrayItem.ClickedCh] = pr
+					}
 				}
 			}
 
 			systray.AddSeparator()
 
-			if len(myPRs) != 0 && len(otherPRs) == 0 {
+			if len(myPRs.Keys()) != 0 && len(otherPRs.Keys()) == 0 {
 				systray.AddMenuItem("No PRs to review, no news is good news.", "")
-			} else if len(otherPRs) != 0 {
-				for _, pr := range otherPRs {
-					systrayItem := renderPR(pr)
-					channels = append(channels, systrayItem.ClickedCh)
-					channelsMap[systrayItem.ClickedCh] = pr
+			} else if len(otherPRs.Keys()) != 0 {
+				for _, repo := range otherPRs.Keys() {
+					prs, _ := otherPRs.Get(repo)
+					prList := prs.([]pullRequest)
+					if len(prList) == 0 {
+						continue
+					}
+
+					for _, pr := range prList {
+						systrayItem := renderPR(pr)
+						channels = append(channels, systrayItem.ClickedCh)
+						channelsMap[systrayItem.ClickedCh] = pr
+					}
 				}
 			}
 
