@@ -95,6 +95,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 						continue
 					}
 
+					systray.AddMenuItem(repo, "").Disable()
 					for _, pr := range prList {
 						systrayItem := renderPR(pr)
 						channels = append(channels, systrayItem.ClickedCh)
@@ -115,6 +116,7 @@ func setupMenu(ctx context.Context, cancel context.CancelFunc) {
 						continue
 					}
 
+					systray.AddMenuItem(repo, "").Disable()
 					for _, pr := range prList {
 						systrayItem := renderPR(pr)
 						channels = append(channels, systrayItem.ClickedCh)

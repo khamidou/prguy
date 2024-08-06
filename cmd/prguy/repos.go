@@ -116,6 +116,11 @@ func listUserPRs(token string, isDemo bool) (*orderedmap.OrderedMap, *orderedmap
 			continue
 		}
 
+		closed := prData["state"].(string) == "closed"
+		if closed {
+			continue
+		}
+
 		if prSHA != "" && repoFullName != "" {
 			fmt.Println("Fetching build status", repoFullName, prSHA)
 			prStatus, err = getBuildStatus(repoFullName, prSHA, token)
