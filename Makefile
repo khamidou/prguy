@@ -11,7 +11,7 @@ release: cmd/prguy/*.go
 	codesign -f -o runtime --timestamp -s "Developer ID Application: Karim Hamidou (6NQ4A56YNV)" PRGuy.app
 	zip -r prguy.zip PRGuy.app
 	xcrun notarytool submit prguy.zip --keychain-profile "Karim"
-	@echo "You can call 'xcrun notarytool info YOUR_ID --keychain-profile "Karim"' to check the status of the notarization"
+	@echo "You can call 'xcrun notarytool info --keychain-profile Karim YOUR_ID' to check the status of the notarization"
 
 fmt:
 	go fmt ./...
