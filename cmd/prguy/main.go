@@ -318,7 +318,7 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 			continue
 		}
 
-		scope, ok := parsedResponse["scope"]
+		_, ok = parsedResponse["scope"]
 		if !ok {
 			errorOut("Missing scopes!",
 				"The Github API did not return us the scopes, please retry in a bit.")
@@ -327,7 +327,7 @@ func pollGithubDeviceAuth(deviceCode string, cancel context.CancelFunc) error {
 
 		// Save the access token and scope
 		fmt.Println("Saving access token and scope")
-		c := Config{OAuthToken: access_token[0], Scope: scope[0]}
+		c := Config{OAuthToken: access_token[0]}
 		c.save()
 		cancel()
 		return nil

@@ -58,7 +58,7 @@ func listUserPRs(token string, isDemo bool) (*orderedmap.OrderedMap, *orderedmap
 	}
 
 	if resp.StatusCode != 200 {
-		msg := fmt.Sprintf("Got a '%s'error from the Github API. Please retry in a bit.",
+		msg := fmt.Sprintf("Got a '%s' error from the Github API. Please retry in a bit.",
 			resp.Status)
 		return nil, nil, errors.New(msg)
 	}

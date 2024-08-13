@@ -1,49 +1,37 @@
 package main
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"time"
+	"github.com/zalando/go-keyring"
+	"os/user"
 )
 
+const keychainService = "prguy"
+
 type Config struct {
-	OAuthToken      string
-	Scope           string
-	LastUpdatedTime string
-}
-
-func (c *Config) getConfigPath() (string, error) {
-	dirname, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(dirname, ".prguy"), nil
+	OAuthToken string
 }
 
 func (c *Config) exists() bool {
-	configPath, err := c.getConfigPath()
-	_, err = os.Stat(configPath)
-	return err == nil
+	username, err := user.Current()
+	if err != nil {
+		return false
+	}
+
+	_, err = keyring.Get(keychainService, username.Username)
+	if err != nil {
+		return false
+	}
+
+	return true
 }
 
 func (c *Config) save() error {
-	configPath, err := c.getConfigPath()
-	file, err := os.Create(configPath)
+	username, err := user.Current()
 	if err != nil {
 		return err
 	}
 
-	defer file.Close()
-	c.LastUpdatedTime = time.Now().String()
-	jsonData, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = file.Write(jsonData)
+	err = keyring.Set(keychainService, username.Username, c.OAuthToken)
 	if err != nil {
 		return err
 	}
@@ -52,17 +40,16 @@ func (c *Config) save() error {
 }
 
 func (c *Config) load() error {
-	configPath, err := c.getConfigPath()
-	file, err := os.Open(configPath)
+	username, err := user.Current()
 	if err != nil {
 		return err
 	}
 
-	defer file.Close()
-	jsonData, err := ioutil.ReadAll(file)
+	secret, err := keyring.Get(keychainService, username.Username)
 	if err != nil {
 		return err
 	}
 
-	return json.Unmarshal(jsonData, c)
+	c.OAuthToken = secret
+	return nil
 }
